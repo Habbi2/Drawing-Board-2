@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useDrawingState } from '@/hooks/useDrawingState';
@@ -14,7 +14,7 @@ const DrawingCanvas = dynamic(
   { ssr: false }
 );
 
-export default function DisplayPage() {
+function DisplayPageContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session') || 'default';
   const urlWidth = searchParams.get('width');
@@ -130,5 +130,13 @@ export default function DisplayPage() {
         onSelect={handleSelect}
       />
     </div>
+  );
+}
+
+export default function DisplayPage() {
+  return (
+    <Suspense fallback={<div style={{ backgroundColor: 'transparent' }} />}>
+      <DisplayPageContent />
+    </Suspense>
   );
 }

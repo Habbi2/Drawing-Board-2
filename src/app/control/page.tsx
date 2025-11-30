@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Stage } from 'konva/lib/Stage';
@@ -23,7 +23,7 @@ const DrawingCanvas = dynamic(
 // Admin password from environment variable (fallback for development)
 const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Empedocles2';
 
-export default function ControlPage() {
+function ControlPageContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session') || 'default';
   const adminParam = searchParams.get('admin');
@@ -378,5 +378,17 @@ export default function ControlPage() {
         onSave={handleSave}
       />
     </div>
+  );
+}
+
+export default function ControlPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen flex items-center justify-center bg-gray-950 text-white">
+        <div className="text-xl">Loading...</div>
+      </div>
+    }>
+      <ControlPageContent />
+    </Suspense>
   );
 }
