@@ -44,6 +44,7 @@ function ControlPageContent() {
   const [showSaveModal, setShowSaveModal] = useState(false);
 
   const stageRef = useRef<Stage>(null);
+  const pendingUndoRedoRef = useRef(false);
 
   const {
     shapes,
@@ -144,6 +145,14 @@ function ControlPageContent() {
     scheduleAutosave(shapes);
   }, [shapes, saveToLocalStorage, scheduleAutosave]);
 
+  // Broadcast full sync after undo/redo
+  useEffect(() => {
+    if (pendingUndoRedoRef.current) {
+      pendingUndoRedoRef.current = false;
+      broadcastFullSync(shapes);
+    }
+  }, [shapes, broadcastFullSync]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -196,14 +205,14 @@ function ControlPageContent() {
   }, [updateShape, broadcastUpdateShape]);
 
   const handleUndo = useCallback(() => {
+    pendingUndoRedoRef.current = true;
     undo();
-    broadcastUndo();
-  }, [undo, broadcastUndo]);
+  }, [undo]);
 
   const handleRedo = useCallback(() => {
+    pendingUndoRedoRef.current = true;
     redo();
-    broadcastRedo();
-  }, [redo, broadcastRedo]);
+  }, [redo]);
 
   const handleClear = useCallback(() => {
     if (confirm('Are you sure you want to clear the canvas?')) {
