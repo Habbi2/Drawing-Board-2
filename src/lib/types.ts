@@ -127,7 +127,7 @@ export interface ToolSettings {
 
 // Canvas sync message types
 export interface CanvasSyncMessage {
-  type: 'add_shape' | 'update_shape' | 'delete_shape' | 'clear' | 'full_sync' | 'undo' | 'redo';
+  type: 'add_shape' | 'update_shape' | 'delete_shape' | 'clear' | 'full_sync' | 'request_sync';
   payload: Shape | Shape[] | string | null;
   sessionId: string;
   timestamp: number;

@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useDrawingState } from '@/hooks/useDrawingState';
 import { useCanvasSync } from '@/hooks/useCanvasSync';
-import { usePersistence } from '@/hooks/usePersistence';
 import { ToolSettings } from '@/lib/types';
 
 // Dynamic import to avoid SSR issues with Konva
@@ -45,23 +44,17 @@ function DisplayPageContent() {
     syncDeleteShape,
     syncClear,
     syncFullSync,
-    undo,
-    redo,
-    setShapes,
   } = useDrawingState();
 
-  const { loadFromLocalStorage } = usePersistence(sessionId);
-
-  // Canvas sync for real-time updates
-  useCanvasSync({
+  // Canvas sync for real-time updates - display is NOT controller
+  const { isConnected, requestSync } = useCanvasSync({
     sessionId,
     onShapeAdded: syncAddShape,
     onShapeUpdated: syncUpdateShape,
     onShapeDeleted: syncDeleteShape,
     onClear: syncClear,
     onFullSync: syncFullSync,
-    onUndo: undo,
-    onRedo: redo,
+    isController: false,
   });
 
   // Update canvas size from URL params
@@ -74,39 +67,32 @@ function DisplayPageContent() {
     }
   }, [urlWidth, urlHeight]);
 
-  // Load from localStorage on mount and poll for changes
-  const lastSyncRef = useRef<string>('');
-  
+  // Mark ready once connected
   useEffect(() => {
-    const loadShapes = () => {
-      const savedShapes = loadFromLocalStorage();
-      if (savedShapes) {
-        const shapesJson = JSON.stringify(savedShapes);
-        // Only update if shapes have actually changed
-        if (shapesJson !== lastSyncRef.current) {
-          lastSyncRef.current = shapesJson;
-          setShapes(savedShapes, false);
-        }
+    if (isConnected) {
+      setIsReady(true);
+    }
+  }, [isConnected]);
+
+  // Periodically request sync as a fallback (every 10 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isConnected) {
+        requestSync();
       }
-    };
-
-    // Initial load
-    loadShapes();
-    setIsReady(true);
-
-    // Poll localStorage every 500ms for changes (backup sync)
-    const interval = setInterval(loadShapes, 500);
+    }, 10000);
 
     return () => clearInterval(interval);
-  }, [loadFromLocalStorage, setShapes]);
+  }, [isConnected, requestSync]);
 
   // Empty handlers for display mode (read-only)
   const handleShapeAdd = useCallback(() => {}, []);
   const handleShapeUpdate = useCallback(() => {}, []);
   const handleSelect = useCallback(() => {}, []);
 
+  // Show nothing until ready (prevents flash)
   if (!isReady) {
-    return null; // Don't render until ready
+    return null;
   }
 
   return (

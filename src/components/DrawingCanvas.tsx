@@ -31,28 +31,35 @@ interface DrawingCanvasProps {
   stageRef?: React.RefObject<StageType | null>;
 }
 
-// Image component that loads from URL
+// Image component that loads from URL - memoized for performance
 const URLImage: React.FC<{
   shape: ImageShape;
   isSelected: boolean;
   onSelect: () => void;
   onChange: (newAttrs: Partial<ImageShape>) => void;
-}> = ({ shape, isSelected, onSelect, onChange }) => {
+}> = React.memo(({ shape, isSelected, onSelect, onChange }) => {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const imageRef = useRef<any>(null);
   const trRef = useRef<any>(null);
+  const prevSrcRef = useRef<string>('');
 
+  // Only reload image if src actually changes
   useEffect(() => {
+    if (shape.src === prevSrcRef.current && image) return;
+    
+    prevSrcRef.current = shape.src;
     const img = new window.Image();
     img.crossOrigin = 'anonymous';
     img.src = shape.src;
     img.onload = () => setImage(img);
-  }, [shape.src]);
+  }, [shape.src, image]);
 
   useEffect(() => {
     if (isSelected && trRef.current && imageRef.current) {
       trRef.current.nodes([imageRef.current]);
-      trRef.current.getLayer().batchDraw();
+      // Only redraw the layer, don't force full canvas redraw
+      const layer = trRef.current.getLayer();
+      if (layer) layer.batchDraw();
     }
   }, [isSelected]);
 
@@ -104,7 +111,10 @@ const URLImage: React.FC<{
       )}
     </>
   );
-};
+});
+
+// Display name for debugging
+URLImage.displayName = 'URLImage';
 
 export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   shapes,
@@ -125,12 +135,20 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   const [currentShape, setCurrentShape] = useState<Shape | null>(null);
   const transformerRef = useRef<any>(null);
   const selectedShapeRef = useRef<any>(null);
+  
+  // Throttle refs for performance optimization
+  const lastMoveTimeRef = useRef(0);
+  const pendingMoveRef = useRef<(() => void) | null>(null);
+  const THROTTLE_MS = 16; // ~60fps
 
-  // Handle transformer for selected shapes
+  // Handle transformer for selected shapes - avoid unnecessary redraws
   useEffect(() => {
     if (selectedId && transformerRef.current && selectedShapeRef.current) {
       transformerRef.current.nodes([selectedShapeRef.current]);
-      transformerRef.current.getLayer().batchDraw();
+      // Konva will handle the redraw automatically, no need for manual batchDraw
+    } else if (transformerRef.current) {
+      // Clear transformer when nothing is selected
+      transformerRef.current.nodes([]);
     }
   }, [selectedId]);
 
@@ -276,7 +294,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     }
   }, [isDisplayMode, toolSettings, getPointerPosition, onSelect, onShapeAdd]);
 
-  const handleMouseMove = useCallback(() => {
+  // Core move handler logic (separated for throttling)
+  const processMouseMove = useCallback(() => {
     if (!isDrawing.current || !currentShapeRef.current || isDisplayMode) return;
 
     const pos = getPointerPosition();
@@ -330,7 +349,37 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     }
   }, [isDisplayMode, getPointerPosition]);
 
+  // Throttled mouse move handler for better performance
+  const handleMouseMove = useCallback(() => {
+    if (!isDrawing.current || isDisplayMode) return;
+
+    const now = Date.now();
+    const timeSinceLastMove = now - lastMoveTimeRef.current;
+
+    if (timeSinceLastMove >= THROTTLE_MS) {
+      // Enough time has passed, process immediately
+      lastMoveTimeRef.current = now;
+      processMouseMove();
+    } else {
+      // Schedule for later if not already scheduled
+      if (!pendingMoveRef.current) {
+        pendingMoveRef.current = () => {
+          lastMoveTimeRef.current = Date.now();
+          processMouseMove();
+          pendingMoveRef.current = null;
+        };
+        setTimeout(pendingMoveRef.current, THROTTLE_MS - timeSinceLastMove);
+      }
+    }
+  }, [isDisplayMode, processMouseMove]);
+
   const handleMouseUp = useCallback(() => {
+    // Process any pending move before finishing
+    if (pendingMoveRef.current) {
+      pendingMoveRef.current();
+      pendingMoveRef.current = null;
+    }
+    
     if (!isDrawing.current || !currentShapeRef.current) return;
     
     isDrawing.current = false;

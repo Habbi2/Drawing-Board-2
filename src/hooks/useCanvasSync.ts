@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { supabase, CANVAS_CHANNEL } from '@/lib/supabase';
 import { Shape, CanvasSyncMessage } from '@/lib/types';
 import { RealtimeChannel } from '@supabase/supabase-js';
@@ -12,8 +12,10 @@ interface UseCanvasSyncProps {
   onShapeDeleted: (shapeId: string) => void;
   onClear: () => void;
   onFullSync: (shapes: Shape[]) => void;
-  onUndo: () => void;
-  onRedo: () => void;
+  // Current shapes for responding to sync requests (only needed for control)
+  currentShapes?: Shape[];
+  // Is this the control panel (broadcaster) or display (receiver)?
+  isController?: boolean;
 }
 
 export function useCanvasSync({
@@ -23,10 +25,17 @@ export function useCanvasSync({
   onShapeDeleted,
   onClear,
   onFullSync,
-  onUndo,
-  onRedo,
+  currentShapes,
+  isController = false,
 }: UseCanvasSyncProps) {
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const currentShapesRef = useRef<Shape[]>(currentShapes || []);
+
+  // Keep ref updated with current shapes
+  useEffect(() => {
+    currentShapesRef.current = currentShapes || [];
+  }, [currentShapes]);
 
   useEffect(() => {
     const channelName = `${CANVAS_CHANNEL}:${sessionId}`;
@@ -59,22 +68,55 @@ export function useCanvasSync({
           case 'full_sync':
             onFullSync(message.payload as Shape[]);
             break;
-          case 'undo':
-            onUndo();
-            break;
-          case 'redo':
-            onRedo();
+          case 'request_sync':
+            // Only controller responds to sync requests - broadcast current shapes
+            if (isController && currentShapesRef.current) {
+              // Use setTimeout to ensure we're not in the middle of the message handler
+              setTimeout(() => {
+                channel.send({
+                  type: 'broadcast',
+                  event: 'canvas_update',
+                  payload: {
+                    type: 'full_sync',
+                    payload: currentShapesRef.current,
+                    sessionId,
+                    timestamp: Date.now(),
+                  } as CanvasSyncMessage,
+                });
+              }, 10);
+            }
             break;
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsConnected(true);
+          // If this is a display client, request sync from controller
+          if (!isController) {
+            setTimeout(() => {
+              channel.send({
+                type: 'broadcast',
+                event: 'canvas_update',
+                payload: {
+                  type: 'request_sync',
+                  payload: null,
+                  sessionId,
+                  timestamp: Date.now(),
+                } as CanvasSyncMessage,
+              });
+            }, 100); // Small delay to ensure controller is ready
+          }
+        } else {
+          setIsConnected(false);
+        }
+      });
 
     channelRef.current = channel;
 
     return () => {
       channel.unsubscribe();
     };
-  }, [sessionId, onShapeAdded, onShapeUpdated, onShapeDeleted, onClear, onFullSync, onUndo, onRedo]);
+  }, [sessionId, onShapeAdded, onShapeUpdated, onShapeDeleted, onClear, onFullSync, isController]);
 
   const broadcast = useCallback((type: CanvasSyncMessage['type'], payload: CanvasSyncMessage['payload']) => {
     if (channelRef.current) {
@@ -113,12 +155,8 @@ export function useCanvasSync({
     broadcast('full_sync', shapes);
   }, [broadcast]);
 
-  const broadcastUndo = useCallback(() => {
-    broadcast('undo', null);
-  }, [broadcast]);
-
-  const broadcastRedo = useCallback(() => {
-    broadcast('redo', null);
+  const requestSync = useCallback(() => {
+    broadcast('request_sync', null);
   }, [broadcast]);
 
   return {
@@ -127,7 +165,7 @@ export function useCanvasSync({
     broadcastDeleteShape,
     broadcastClear,
     broadcastFullSync,
-    broadcastUndo,
-    broadcastRedo,
+    requestSync,
+    isConnected,
   };
 }
