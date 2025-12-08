@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useDrawingState } from '@/hooks/useDrawingState';
 import { useCanvasSync } from '@/hooks/useCanvasSync';
 import { ToolSettings } from '@/lib/types';
+
+// Shared session - same as control page
+const SHARED_SESSION = 'shared';
 
 // Dynamic import to avoid SSR issues with Konva
 const DrawingCanvas = dynamic(
@@ -14,14 +16,10 @@ const DrawingCanvas = dynamic(
 );
 
 function DisplayPageContent() {
-  const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session') || 'default';
-  const urlWidth = searchParams.get('width');
-  const urlHeight = searchParams.get('height');
-
-  const [canvasSize, setCanvasSize] = useState({
-    width: urlWidth ? parseInt(urlWidth) : 1920,
-    height: urlHeight ? parseInt(urlHeight) : 1080,
+  // Fixed canvas size for OBS (1080p)
+  const [canvasSize] = useState({
+    width: 1920,
+    height: 1080,
   });
 
   const [isReady, setIsReady] = useState(false);
@@ -48,7 +46,7 @@ function DisplayPageContent() {
 
   // Canvas sync for real-time updates - display is NOT controller
   const { isConnected, requestSync } = useCanvasSync({
-    sessionId,
+    sessionId: SHARED_SESSION,
     onShapeAdded: syncAddShape,
     onShapeUpdated: syncUpdateShape,
     onShapeDeleted: syncDeleteShape,
@@ -56,16 +54,6 @@ function DisplayPageContent() {
     onFullSync: syncFullSync,
     isController: false,
   });
-
-  // Update canvas size from URL params
-  useEffect(() => {
-    if (urlWidth && urlHeight) {
-      setCanvasSize({
-        width: parseInt(urlWidth),
-        height: parseInt(urlHeight),
-      });
-    }
-  }, [urlWidth, urlHeight]);
 
   // Mark ready once connected
   useEffect(() => {

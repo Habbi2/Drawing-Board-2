@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Stage } from 'konva/lib/Stage';
 import { Toolbar } from '@/components/Toolbar';
@@ -13,7 +13,9 @@ import { usePersistence } from '@/hooks/usePersistence';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { Tool, ToolSettings, ImageShape } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
-import { generateSessionId, isDefaultSession } from '@/lib/session';
+
+// Shared session - everyone draws on the same canvas
+const SHARED_SESSION = 'shared';
 
 // Dynamic import to avoid SSR issues with Konva
 const DrawingCanvas = dynamic(
@@ -26,26 +28,8 @@ const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Empedocles2';
 
 function ControlPageContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const sessionId = searchParams.get('session') || 'default';
   const adminParam = searchParams.get('admin');
   const isAdmin = adminParam === ADMIN_PASSWORD;
-  const [showSessionWarning, setShowSessionWarning] = useState(false);
-
-  // Show warning if using default session
-  useEffect(() => {
-    if (isDefaultSession(sessionId)) {
-      setShowSessionWarning(true);
-    }
-  }, [sessionId]);
-
-  // Generate a new unique session
-  const handleNewSession = useCallback(() => {
-    const newSessionId = generateSessionId();
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('session', newSessionId);
-    router.push(`/control?${params.toString()}`);
-  }, [searchParams, router]);
 
   const [toolSettings, setToolSettings] = useState<ToolSettings>({
     tool: 'brush',
@@ -99,7 +83,7 @@ function ControlPageContent() {
     createNewDrawing,
     saveToLocalStorage,
     loadFromLocalStorage,
-  } = usePersistence(sessionId);
+  } = usePersistence(SHARED_SESSION);
 
   const { uploadImage, uploading } = useImageUpload();
 
@@ -111,7 +95,7 @@ function ControlPageContent() {
     broadcastClear,
     broadcastFullSync,
   } = useCanvasSync({
-    sessionId,
+    sessionId: SHARED_SESSION,
     onShapeAdded: syncAddShape,
     onShapeUpdated: syncUpdateShape,
     onShapeDeleted: syncDeleteShape,
@@ -317,60 +301,20 @@ function ControlPageContent() {
 
   // Copy display URL
   const handleCopyDisplayUrl = useCallback(() => {
-    const url = `${window.location.origin}/display?session=${sessionId}&width=${canvasSize.width}&height=${canvasSize.height}`;
+    const url = `${window.location.origin}/display`;
     navigator.clipboard.writeText(url);
     alert('Display URL copied to clipboard!\n\nAdd this as a Browser Source in OBS.');
-  }, [sessionId, canvasSize]);
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-gray-950">
-      {/* Session Warning Modal */}
-      {showSessionWarning && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-lg p-6 max-w-md mx-4 border border-gray-700">
-            <h2 className="text-xl font-bold text-yellow-400 mb-3">⚠️ Default Session</h2>
-            <p className="text-gray-300 mb-4">
-              You&apos;re using the default session. Other users may accidentally join and 
-              interfere with your drawings. Generate a unique session for privacy.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowSessionWarning(false)}
-                className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
-              >
-                Keep Default
-              </button>
-              <button
-                onClick={() => {
-                  handleNewSession();
-                  setShowSessionWarning(false);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500"
-              >
-                Generate New Session
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <header className="h-12 bg-gray-900 border-b border-gray-800 flex items-center px-4">
-        <h1 className="text-white font-semibold">Drawing Board Control Panel</h1>
+        <h1 className="text-white font-semibold">Drawing Board</h1>
         <span className="ml-auto text-gray-400 text-sm flex items-center gap-3">
           {isAdmin && <span className="text-green-400 font-medium">🔐 Admin</span>}
-          <span className="flex items-center gap-2">
-            Session: <span className={`font-mono ${isDefaultSession(sessionId) ? 'text-yellow-400' : 'text-blue-400'}`}>{sessionId}</span>
-            <button
-              onClick={handleNewSession}
-              className="text-xs px-2 py-0.5 bg-gray-700 rounded hover:bg-gray-600"
-              title="Generate new session ID"
-            >
-              New
-            </button>
-          </span>
-          {saving && <span className="ml-2 text-yellow-400">Saving...</span>}
-          {uploading && <span className="ml-2 text-yellow-400">Uploading...</span>}
+          {saving && <span className="text-yellow-400">Saving...</span>}
+          {uploading && <span className="text-yellow-400">Uploading...</span>}
         </span>
       </header>
 
