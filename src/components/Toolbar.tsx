@@ -112,9 +112,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onCopyDisplayUrl,
   saving,
 }) => {
-    }
-  };
-
   return (
     <div className="bg-gray-900 text-white p-4 flex flex-col gap-4 h-full overflow-y-auto">
       {/* File Actions */}
