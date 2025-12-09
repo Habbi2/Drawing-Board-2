@@ -8,7 +8,6 @@ export type Tool =
   | 'arrow' 
   | 'line' 
   | 'text' 
-  | 'image'
   | 'select';
 
 // Base shape interface
@@ -90,14 +89,6 @@ export interface TextShape extends BaseShape {
   width?: number;
 }
 
-// Image shape
-export interface ImageShape extends BaseShape {
-  type: 'image';
-  src: string;
-  width: number;
-  height: number;
-}
-
 // Union type for all shapes
 export type Shape = 
   | FreeDrawShape 
@@ -105,8 +96,7 @@ export type Shape =
   | CircleShape 
   | ArrowShape 
   | LineShape 
-  | TextShape 
-  | ImageShape;
+  | TextShape;
 
 // Drawing state
 export interface DrawingState {

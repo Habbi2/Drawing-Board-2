@@ -10,8 +10,7 @@ import { SaveDrawingModal } from '@/components/SaveDrawingModal';
 import { useDrawingState } from '@/hooks/useDrawingState';
 import { useCanvasSync } from '@/hooks/useCanvasSync';
 import { usePersistence } from '@/hooks/usePersistence';
-import { useImageUpload } from '@/hooks/useImageUpload';
-import { Tool, ToolSettings, ImageShape } from '@/lib/types';
+import { Tool, ToolSettings } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Shared session - everyone draws on the same canvas
@@ -84,8 +83,6 @@ function ControlPageContent() {
     saveToLocalStorage,
     loadFromLocalStorage,
   } = usePersistence(SHARED_SESSION);
-
-  const { uploadImage, uploading } = useImageUpload();
 
   // Canvas sync for real-time collaboration - control is the controller/broadcaster
   const {
@@ -263,42 +260,6 @@ function ControlPageContent() {
     broadcastClear();
   }, [shapes.length, createNewDrawing, clearAll, broadcastClear]);
 
-  // Image upload handler
-  const handleImageUpload = useCallback(async (file: File) => {
-    const url = await uploadImage(file);
-    if (url) {
-      // Create image element to get dimensions
-      const img = new window.Image();
-      img.src = url;
-      img.onload = () => {
-        // Scale down if too large
-        let width = img.width;
-        let height = img.height;
-        const maxSize = 400;
-        
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width *= ratio;
-          height *= ratio;
-        }
-
-        const imageShape: ImageShape = {
-          id: uuidv4(),
-          type: 'image',
-          x: canvasSize.width / 2 - width / 2,
-          y: canvasSize.height / 2 - height / 2,
-          src: url,
-          width,
-          height,
-          draggable: true,
-        };
-
-        handleShapeAdd(imageShape);
-        setToolSettings(prev => ({ ...prev, tool: 'select' }));
-      };
-    }
-  }, [uploadImage, canvasSize, handleShapeAdd]);
-
   // Copy display URL
   const handleCopyDisplayUrl = useCallback(() => {
     const url = `${window.location.origin}/display`;
@@ -314,7 +275,6 @@ function ControlPageContent() {
         <span className="ml-auto text-gray-400 text-sm flex items-center gap-3">
           {isAdmin && <span className="text-green-400 font-medium">🔐 Admin</span>}
           {saving && <span className="text-yellow-400">Saving...</span>}
-          {uploading && <span className="text-yellow-400">Uploading...</span>}
         </span>
       </header>
 
@@ -346,7 +306,6 @@ function ControlPageContent() {
             onSendBackward={sendBackward}
             onBringToFront={bringToFront}
             onSendToBack={sendToBack}
-            onImageUpload={handleImageUpload}
             onCopyDisplayUrl={handleCopyDisplayUrl}
             saving={saving}
           />

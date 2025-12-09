@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React from 'react';
 import { Tool, ToolSettings } from '@/lib/types';
 import { 
   Paintbrush, 
@@ -11,7 +11,6 @@ import {
   ArrowRight, 
   Minus, 
   Type, 
-  Image, 
   MousePointer2,
   Undo2,
   Redo2,
@@ -52,7 +51,6 @@ interface ToolbarProps {
   onSendBackward: () => void;
   onBringToFront: () => void;
   onSendToBack: () => void;
-  onImageUpload: (file: File) => void;
   onCopyDisplayUrl: () => void;
   saving?: boolean;
 }
@@ -67,7 +65,6 @@ const tools: { tool: Tool; icon: React.ReactNode; label: string }[] = [
   { tool: 'arrow', icon: <ArrowRight size={20} />, label: 'Arrow' },
   { tool: 'line', icon: <Minus size={20} />, label: 'Line' },
   { tool: 'text', icon: <Type size={20} />, label: 'Text' },
-  { tool: 'image', icon: <Image size={20} />, label: 'Image' },
 ];
 
 const colors = [
@@ -112,25 +109,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onSendBackward,
   onBringToFront,
   onSendToBack,
-  onImageUpload,
   onCopyDisplayUrl,
   saving,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleImageClick = () => {
-    if (toolSettings.tool === 'image') {
-      fileInputRef.current?.click();
-    } else {
-      onToolChange('image');
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onImageUpload(file);
-      e.target.value = '';
     }
   };
 
@@ -217,7 +198,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           {tools.map(({ tool, icon, label }) => (
             <button
               key={tool}
-              onClick={() => tool === 'image' ? handleImageClick() : onToolChange(tool)}
+              onClick={() => onToolChange(tool)}
               className={`p-2 rounded transition-colors ${
                 toolSettings.tool === tool
                   ? 'bg-blue-600 hover:bg-blue-500'
@@ -229,13 +210,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </button>
           ))}
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp"
-          onChange={handleFileChange}
-          className="hidden"
-        />
       </div>
 
       {/* Layer Order (when selection exists) */}

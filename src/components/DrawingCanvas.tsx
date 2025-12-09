@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Stage, Layer, Line, Rect, Ellipse, Arrow, Text, Image as KonvaImage, Transformer } from 'react-konva';
+import { Stage, Layer, Line, Rect, Ellipse, Arrow, Text, Transformer } from 'react-konva';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { Stage as StageType } from 'konva/lib/Stage';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,8 +14,7 @@ import {
   CircleShape, 
   ArrowShape, 
   LineShape, 
-  TextShape,
-  ImageShape 
+  TextShape
 } from '@/lib/types';
 
 interface DrawingCanvasProps {
@@ -30,91 +29,6 @@ interface DrawingCanvasProps {
   onSelect: (id: string | null) => void;
   stageRef?: React.RefObject<StageType | null>;
 }
-
-// Image component that loads from URL - memoized for performance
-const URLImage: React.FC<{
-  shape: ImageShape;
-  isSelected: boolean;
-  onSelect: () => void;
-  onChange: (newAttrs: Partial<ImageShape>) => void;
-}> = React.memo(({ shape, isSelected, onSelect, onChange }) => {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const imageRef = useRef<any>(null);
-  const trRef = useRef<any>(null);
-  const prevSrcRef = useRef<string>('');
-
-  // Only reload image if src actually changes
-  useEffect(() => {
-    if (shape.src === prevSrcRef.current && image) return;
-    
-    prevSrcRef.current = shape.src;
-    const img = new window.Image();
-    img.crossOrigin = 'anonymous';
-    img.src = shape.src;
-    img.onload = () => setImage(img);
-  }, [shape.src, image]);
-
-  useEffect(() => {
-    if (isSelected && trRef.current && imageRef.current) {
-      trRef.current.nodes([imageRef.current]);
-      // Only redraw the layer, don't force full canvas redraw
-      const layer = trRef.current.getLayer();
-      if (layer) layer.batchDraw();
-    }
-  }, [isSelected]);
-
-  if (!image) return null;
-
-  return (
-    <>
-      <KonvaImage
-        ref={imageRef}
-        image={image}
-        x={shape.x}
-        y={shape.y}
-        width={shape.width}
-        height={shape.height}
-        rotation={shape.rotation}
-        scaleX={shape.scaleX}
-        scaleY={shape.scaleY}
-        opacity={shape.opacity}
-        draggable={shape.draggable !== false}
-        onClick={onSelect}
-        onTap={onSelect}
-        onDragEnd={(e) => {
-          onChange({
-            x: e.target.x(),
-            y: e.target.y(),
-          });
-        }}
-        onTransformEnd={() => {
-          const node = imageRef.current;
-          onChange({
-            x: node.x(),
-            y: node.y(),
-            rotation: node.rotation(),
-            scaleX: node.scaleX(),
-            scaleY: node.scaleY(),
-          });
-        }}
-      />
-      {isSelected && (
-        <Transformer
-          ref={trRef}
-          boundBoxFunc={(oldBox, newBox) => {
-            if (newBox.width < 5 || newBox.height < 5) {
-              return oldBox;
-            }
-            return newBox;
-          }}
-        />
-      )}
-    </>
-  );
-});
-
-// Display name for debugging
-URLImage.displayName = 'URLImage';
 
 export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   shapes,
@@ -583,22 +497,6 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
               onTransformEnd={(e) => handleTransformEnd(shape, e)}
             />
           </React.Fragment>
-        );
-
-      case 'image':
-        const imageShape = shape as ImageShape;
-        return (
-          <URLImage
-            key={shape.id}
-            shape={imageShape}
-            isSelected={isSelected}
-            onSelect={() => !isDisplayMode && toolSettings.tool === 'select' && onSelect(shape.id)}
-            onChange={(newAttrs) => {
-              if (!isDisplayMode) {
-                onShapeUpdate({ ...imageShape, ...newAttrs });
-              }
-            }}
-          />
         );
 
       default:
