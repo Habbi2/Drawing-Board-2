@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { useDrawingState } from '@/hooks/useDrawingState';
 import { useCanvasSync } from '@/hooks/useCanvasSync';
-import { ToolSettings } from '@/lib/types';
+import { ToolSettings, Shape } from '@/lib/types';
+import { usePersistence } from '@/hooks/usePersistence';
 
 // Shared session - same as control page
 const SHARED_SESSION = 'shared';
@@ -23,6 +24,8 @@ function DisplayPageContent() {
   });
 
   const [isReady, setIsReady] = useState(false);
+  const [fallbackLoaded, setFallbackLoaded] = useState(false);
+  const [fallbackShapes, setFallbackShapes] = useState<Shape[] | null>(null);
 
   // Default tool settings (not used in display mode, but required by canvas)
   const toolSettings: ToolSettings = {
@@ -44,6 +47,9 @@ function DisplayPageContent() {
     syncFullSync,
   } = useDrawingState();
 
+  // Persistence for fallback loading
+  const { drawings, loadDrawing, loadFromLocalStorage } = usePersistence(SHARED_SESSION);
+
   // Canvas sync for real-time updates - display is NOT controller
   const { isConnected, requestSync } = useCanvasSync({
     sessionId: SHARED_SESSION,
@@ -55,12 +61,35 @@ function DisplayPageContent() {
     isController: false,
   });
 
-  // Mark ready once connected
+
+  // Mark ready once connected, or fallback to DB/localStorage if not connected after 2s
   useEffect(() => {
+    let fallbackTimeout: NodeJS.Timeout;
     if (isConnected) {
       setIsReady(true);
+    } else {
+      fallbackTimeout = setTimeout(async () => {
+        // Only run fallback if not already loaded
+        if (!isConnected && !fallbackLoaded) {
+          // Try to load latest drawing from DB
+          if (drawings && drawings.length > 0) {
+            const latest = drawings[0];
+            const loaded = await loadDrawing(latest.id);
+            setFallbackShapes(loaded || null);
+          } else {
+            // Fallback to localStorage
+            const local = loadFromLocalStorage();
+            setFallbackShapes(local);
+          }
+          setFallbackLoaded(true);
+          setIsReady(true);
+        }
+      }, 2000);
     }
-  }, [isConnected]);
+    return () => {
+      if (fallbackTimeout) clearTimeout(fallbackTimeout);
+    };
+  }, [isConnected, drawings, loadDrawing, loadFromLocalStorage, fallbackLoaded]);
 
   // Periodically request sync as a fallback (every 10 seconds)
   useEffect(() => {
@@ -78,10 +107,14 @@ function DisplayPageContent() {
   const handleShapeUpdate = useCallback(() => {}, []);
   const handleSelect = useCallback(() => {}, []);
 
+
   // Show nothing until ready (prevents flash)
   if (!isReady) {
     return null;
   }
+
+  // Use fallback shapes if not connected
+  const displayShapes = isConnected ? shapes : (fallbackShapes || []);
 
   return (
     <div 
@@ -93,7 +126,7 @@ function DisplayPageContent() {
       }}
     >
       <DrawingCanvas
-        shapes={shapes}
+        shapes={displayShapes}
         selectedId={null}
         toolSettings={toolSettings}
         width={canvasSize.width}
